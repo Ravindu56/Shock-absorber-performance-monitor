@@ -1,0 +1,6 @@
+numpy>=1.22
+pyserial>=3.5
+pyqtgraph>=0.13.3
+# One Qt binding (pyqtgraph picks whichever is installed):
+PySide6>=6.5
+# PyQt5>=5.15   # alternative

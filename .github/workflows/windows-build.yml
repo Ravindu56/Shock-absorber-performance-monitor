@@ -1,0 +1,52 @@
+# Builds the Windows program and installer on GitHub's Windows machines.
+# Push this project to a GitHub repository, then: Actions -> "Windows build" ->
+# Run workflow. Download the "ShockMonitor-windows" artifact when it finishes.
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r dashboard/requirements.txt "pyinstaller>=6.6"
+
+      - name: Tests
+        run: python -m unittest discover -s dashboard/tests -t .
+
+      - name: Build exe
+        run: pyinstaller --noconfirm --clean packaging/shock_monitor.spec
+
+      - name: Smoke test (start the exe with the simulator for 10 s)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\ShockMonitor\ShockMonitor.exe -ArgumentList "--simulate" -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { Get-Content "$env:USERPROFILE\Documents\ShockMonitor\crash.log" -ErrorAction SilentlyContinue; exit 1 }
+          Stop-Process -Id $p.Id
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $ver = python -c "import dashboard; print(dashboard.__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" packaging\installer.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShockMonitor-windows
+          path: |
+            dist/installer/*.exe
+            dist/ShockMonitor/
